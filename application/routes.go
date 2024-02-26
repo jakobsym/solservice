@@ -17,7 +17,7 @@ func loadRoutes() *chi.Mux {
 	})
 
 	router.Route("/watchlist", loadWatchlistRoutes)
-	//router.Roue("/token", loadTokenRoutes)
+	router.Route("/token", loadTokenRoutes)
 
 	return router
 }
@@ -32,4 +32,11 @@ func loadWatchlistRoutes(router chi.Router) {
 	router.Put("/{id}", watchlistHandler.UpdateByID)
 }
 
-// loadTokenRoutes(router chi.Router) {}
+func loadTokenRoutes(router chi.Router) {
+	tokenHandler := &handler.Token{}
+
+	router.Post("/", tokenHandler.Create)
+	router.Get("/", tokenHandler.List)
+	router.Get("/{id}", tokenHandler.GetByCA)
+	router.Delete("/{id}", tokenHandler.DeleteByCA)
+}
