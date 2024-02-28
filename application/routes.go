@@ -37,6 +37,6 @@ func loadTokenRoutes(router chi.Router) {
 
 	router.Post("/", tokenHandler.Create)
 	router.Get("/", tokenHandler.List)
-	router.Get("/{id}", tokenHandler.GetByCA)
-	router.Delete("/{id}", tokenHandler.DeleteByCA)
+	router.Get("/{ca}", tokenHandler.GetByCA)
+	router.Delete("/{ca}", tokenHandler.DeleteByCA)
 }
