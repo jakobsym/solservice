@@ -19,3 +19,5 @@ go.work
 
 #macos stuff
 .DS_Store
+
+.env
