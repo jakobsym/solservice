@@ -12,32 +12,50 @@ import (
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/go-chi/chi/v5"
 	"github.com/jakobsym/solservice/model"
 	"github.com/joho/godotenv"
 )
 
 type Token struct{}
 
-// localhost:3000/token/<CA>
+// curl -X GET localhost:3000/token/HUdqc5MR5h3FssESabPnQ1GTgTcPvnNudAuLj5J6a9sU
 func (t *Token) GetByCA(w http.ResponseWriter, r *http.Request) {
-	//caParam := chi.URLParam(r, "ca")
+	caParam := chi.URLParam(r, "ca")
+
+	// Get cur price
+	price, err := t.FetchTokenPrice(caParam)
+	if err != nil {
+		fmt.Println("error with FetchTokenPrice()")
+	}
+	fmt.Println("price: ", price)
+
+	// get supply
+	supply, err := GetTokenSupply(caParam)
+	if err != nil {
+		fmt.Println("error with GetTokenSupply()")
+	}
+	formattedSupply := FormatFloat(supply)
+	fmt.Println("supply: ", formattedSupply)
+
+	// get MC
+	mc := CalcMarketCap(supply, price)
+	formattedMc := FormatFloat(mc)
+	fmt.Println("mc: ", formattedMc)
+
+	// Get all holders
+	holders, err := GetTokenHolders(caParam) // 3-15s response time (awful)
+	if err != nil {
+		fmt.Println("error with GetTokenHolders()")
+	}
+	fmt.Println("token holders:", holders)
+
 	/*
 		if token, err := t.Token.FindByCA(caParam); err != nil {
 			// either fetch from DB if token exists in DB already or get info via jup
 		}
 	*/
-	// show more than just price?
-	// do some calculations etc. (% change over X hours)
-	// maybe return other misc. information regarding the coin (birdeye api?)
-	// I.E: # of holders, MC (Max supply * cur. price), supply?
 
-	/*
-		supply: HeliusRPC || Solana RPC API
-		holders: HeliusRPC || Solana RPC API (when called, handle error returning server error)
-		MC: calulation
-	*/
-
-	//fmt.Println("getbyca route")
 }
 
 func (t *Token) List(w http.ResponseWriter, r *http.Request) {
@@ -127,8 +145,7 @@ func (t *Token) FetchTokenSymbol(coinAddress string) (*model.Token, error) {
 	return token, nil
 }
 
-// TODO: fix
-func (t *Token) FetchTokenData(coinAddress string) error {
+func (t *Token) FetchTokenPrice(coinAddress string) (float64, error) {
 	// either fetch from DB if token exists in DB already or get info via jup
 	var response model.Response
 	client := &http.Client{}
@@ -138,31 +155,29 @@ func (t *Token) FetchTokenData(coinAddress string) error {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("error creating newrequest(): %w", err)
+		return 0, fmt.Errorf("error creating newrequest(): %w", err)
 	}
 
 	// send request
 	res, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error doing request: %w", err)
+		return 0, fmt.Errorf("error doing request: %w", err)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", res.StatusCode)
+		return 0, fmt.Errorf("unexpected status code: %d", res.StatusCode)
 	}
 
 	// read response from response body
 	err = json.NewDecoder(res.Body).Decode(&response)
 	if err != nil {
-		return fmt.Errorf("error decoding res.body: %w", err)
+		return 0, fmt.Errorf("error decoding res.body: %w", err)
 	}
-	return nil
+	return float64(response.Data[coinAddress].Price), nil
 }
 
-// ca to test: nosXBVoaCTtYdLvKY6Csb4AC8JCdQKKAaWYtx2ZMoo7
-// supply: 99,999,974.58
-func GetTokenSupply(coinAddress string) (uint64, error) {
+func GetTokenSupply(coinAddress string) (float64, error) {
 	endpoint := rpc.MainNetBeta_RPC
 	client := rpc.New(endpoint)
 
@@ -171,18 +186,24 @@ func GetTokenSupply(coinAddress string) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error getting token supply: %w", err)
 	}
-	res, err := strconv.ParseUint(supply.Value.Amount, 10, 64)
+	res, err := strconv.ParseFloat(supply.Value.Amount, 64)
 	if err != nil {
 		return 0, fmt.Errorf("error converting to uint: %w", err)
 	}
 	// prettify output?
-	return res, nil
+	return (res / 1e9), nil
 }
 
 func CalcMarketCap(supply, price float64) float64 {
-	return supply * price
+	mc := supply * price
+	// TODO: format more to only have .2 decimal
+	return mc
 }
 
+// TODO: Refactor
+// Response time range is way too high
+// not sure if its how the pagination is implemented
+// or if the issue is within my code
 func GetTokenHolders(coinAddres string) (uint64, error) {
 	client := &http.Client{}
 	page := 1
@@ -245,4 +266,10 @@ func GetTokenHolders(coinAddres string) (uint64, error) {
 	}
 
 	return uint64(len(allHolders)), nil
+}
+
+func FormatFloat(f float64) string {
+	formattedFloat := strconv.FormatFloat(f, 'f', -1, 64)
+	// TODO: format more to only have .2 decimal
+	return formattedFloat
 }
