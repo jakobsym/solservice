@@ -14,13 +14,23 @@ import (
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/jakobsym/solservice/model"
+	"github.com/jakobsym/solservice/repository/token"
 	"github.com/joho/godotenv"
 )
 
-type Token struct{}
+type TokenHandler struct {
+	Repo *token.MySqlRepo
+}
+
+/*
+	if token, err := t.Token.FindByCA(caParam); err != nil {
+		// either fetch from DB if token exists in DB already or get info via jup
+	}
+
+*/
 
 // curl -X GET localhost:3000/token/HUdqc5MR5h3FssESabPnQ1GTgTcPvnNudAuLj5J6a9sU
-func (t *Token) GetByCA(w http.ResponseWriter, r *http.Request) {
+func (t *TokenHandler) GetByCA(w http.ResponseWriter, r *http.Request) {
 	caParam := chi.URLParam(r, "ca")
 
 	// Get cur price
@@ -49,34 +59,27 @@ func (t *Token) GetByCA(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("error with GetTokenHolders()")
 	}
 	fmt.Println("token holders:", holders)
-
-	/*
-		if token, err := t.Token.FindByCA(caParam); err != nil {
-			// either fetch from DB if token exists in DB already or get info via jup
-		}
-	*/
-
 }
 
-func (t *Token) List(w http.ResponseWriter, r *http.Request) {
+func (t *TokenHandler) List(w http.ResponseWriter, r *http.Request) {
 	// list all tokens in DB
 	// here we call jupv4 api to obtain ALL information regarding tickers
 	// allowing to display current price
 	fmt.Println("List(token) route")
 }
 
-func (t *Token) DeleteByCA(w http.ResponseWriter, r *http.Request) {
+func (t *TokenHandler) DeleteByCA(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("deletebyca route")
 }
 
-func (t *Token) UpdateByCA(w http.ResponseWriter, r *http.Request) {
+func (t *TokenHandler) UpdateByCA(w http.ResponseWriter, r *http.Request) {
 	// not sure if needed
 	// change the ticker symbol if changed??
 	fmt.Println("updatebyca route")
 }
 
 // curl -X POST -d '{"coin_address":"7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"}' localhost:3000/token
-func (t *Token) Create(w http.ResponseWriter, r *http.Request) {
+func (t *TokenHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		CoinAddress string `json:"coin_address"`
 	}
@@ -85,7 +88,7 @@ func (t *Token) Create(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	// query for CA ticker
+	// Creates token
 	token, err := t.FetchTokenSymbol(body.CoinAddress)
 	if err != nil {
 		fmt.Println(err)
@@ -97,8 +100,12 @@ func (t *Token) Create(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// TODO: insert `token` into DB
-
+	err = t.Repo.InsertToken(token)
+	if err != nil {
+		fmt.Println("error inserting token: %w", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	res, err := json.Marshal(token)
 	if err != nil {
 		fmt.Println("error marshaling created token: %w", err)
@@ -109,7 +116,7 @@ func (t *Token) Create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (t *Token) FetchTokenSymbol(coinAddress string) (*model.Token, error) {
+func (t *TokenHandler) FetchTokenSymbol(coinAddress string) (*model.Token, error) {
 	var response model.Response
 	client := &http.Client{}
 
@@ -145,7 +152,7 @@ func (t *Token) FetchTokenSymbol(coinAddress string) (*model.Token, error) {
 	return token, nil
 }
 
-func (t *Token) FetchTokenPrice(coinAddress string) (float64, error) {
+func (t *TokenHandler) FetchTokenPrice(coinAddress string) (float64, error) {
 	// either fetch from DB if token exists in DB already or get info via jup
 	var response model.Response
 	client := &http.Client{}

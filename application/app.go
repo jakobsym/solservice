@@ -14,20 +14,36 @@ import (
 
 type App struct {
 	router http.Handler
+	db     *sql.DB
 }
 
 func New() *App {
 	app := &App{
-		router: loadRoutes(),
+		db: SetupDB(),
 	}
+	app.loadRoutes()
 	return app
 }
 
 func (a *App) Start(ctx context.Context) error {
-	err := godotenv.Load()
+	server := &http.Server{
+		Addr:    ":3000",
+		Handler: a.router,
+	}
 
+	// pass db connections to handlers here?
+	err := server.ListenAndServe()
 	if err != nil {
-		return fmt.Errorf("error loading data from .env file: %w", err)
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	return nil
+}
+
+func SetupDB() *sql.DB {
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println(err)
 	}
 
 	cfg := mysql.Config{
@@ -38,25 +54,12 @@ func (a *App) Start(ctx context.Context) error {
 		DBName: os.Getenv("DBNAME"),
 	}
 
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+	DB, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	pingErr := db.Ping()
-	if pingErr != nil {
-		log.Fatal(pingErr)
-	}
 	fmt.Println("Db connection established.")
 
-	server := &http.Server{
-		Addr:    ":3000",
-		Handler: a.router,
-	}
-	err = server.ListenAndServe()
-	if err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
-	}
-
-	return nil
+	return DB
 }

@@ -6,9 +6,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jakobsym/solservice/handler"
+	"github.com/jakobsym/solservice/repository/token"
 )
 
-func loadRoutes() *chi.Mux {
+func (a *App) loadRoutes() {
 	router := chi.NewRouter()
 
 	router.Use(middleware.Logger)
@@ -16,13 +17,12 @@ func loadRoutes() *chi.Mux {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	router.Route("/watchlist", loadWatchlistRoutes)
-	router.Route("/token", loadTokenRoutes)
-
-	return router
+	router.Route("/watchlist", a.loadWatchlistRoutes)
+	router.Route("/token", a.loadTokenRoutes)
+	a.router = router
 }
 
-func loadWatchlistRoutes(router chi.Router) {
+func (a *App) loadWatchlistRoutes(router chi.Router) {
 	watchlistHandler := &handler.Watchlist{}
 
 	router.Post("/", watchlistHandler.Create)
@@ -32,8 +32,12 @@ func loadWatchlistRoutes(router chi.Router) {
 	router.Put("/{id}", watchlistHandler.UpdateByID)
 }
 
-func loadTokenRoutes(router chi.Router) {
-	tokenHandler := &handler.Token{}
+func (a *App) loadTokenRoutes(router chi.Router) {
+	tokenHandler := &handler.TokenHandler{
+		Repo: &token.MySqlRepo{
+			DB: a.db,
+		},
+	}
 
 	router.Post("/", tokenHandler.Create)
 	router.Get("/", tokenHandler.List)
